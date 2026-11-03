@@ -22,11 +22,11 @@ else
   say FAIL "hostA→hostB (inter-VLAN path broken)"
 fi
 
-# ---- MTU path probe (hostB -> hostA) ----
+# ---- MTU path probe (hostA -> hostB, so it leaves the router on the VLAN20 SVI that mtu-low shrinks) ----
 SIZE=1472
 OKMTU=0
 while (( SIZE >= 1200 )); do
-  if ip netns exec hostB ping -c1 -M do -s "$SIZE" 192.168.10.2 >/dev/null 2>&1; then
+  if ip netns exec hostA ping -c1 -M do -s "$SIZE" 192.168.20.2 >/dev/null 2>&1; then
     say PASS "Path MTU supports $SIZE bytes (DF)"
     OKMTU=1
     break
@@ -43,18 +43,18 @@ done
 #  - WARN: one of 10/20 missing on trunk
 
 TRUNK=v_trunk_sw
-mapfile -t VLAN_LINES < <(ip -n sw -d bridge vlan show dev "$TRUNK" 2>/dev/null | sed 's/ \+/ /g')
+mapfile -t VLAN_LINES < <(bridge -n sw -d vlan show dev "$TRUNK" 2>/dev/null | sed 's/ \+/ /g')
 
 present_10=0; present_20=0
 untag_10=0;  untag_20=0
 
 for ln in "${VLAN_LINES[@]}"; do
-  # format examples contain: "vid 10 PVID Egress Untagged" or "vid 20"
-  if [[ "$ln" =~ vid[[:space:]]+10 ]]; then
+  # bridge prints the VLAN id as a bare number: "v_trunk_sw 1 PVID Egress Untagged" or " 10"
+  if [[ "$ln" =~ (^|[[:space:]])10([[:space:]]|$) ]]; then
     present_10=1
     [[ "$ln" =~ Egress[[:space:]]+Untagged ]] && untag_10=1
   fi
-  if [[ "$ln" =~ vid[[:space:]]+20 ]]; then
+  if [[ "$ln" =~ (^|[[:space:]])20([[:space:]]|$) ]]; then
     present_20=1
     [[ "$ln" =~ Egress[[:space:]]+Untagged ]] && untag_20=1
   fi
@@ -75,7 +75,7 @@ else
     (( present_10==0 )) && miss+=("10")
     (( present_20==0 )) && miss+=("20")
     say FAIL "Trunk $TRUNK missing VLAN(s): $(IFS=', '; echo "${miss[*]}")"
-    say INFO "Fix: ip -n sw bridge vlan add dev $TRUNK vid 10 ; ip -n sw bridge vlan add dev $TRUNK vid 20"
+    say INFO "Fix: bridge -n sw vlan add dev $TRUNK vid 10 ; bridge -n sw vlan add dev $TRUNK vid 20"
   fi
 fi
 

@@ -1,8 +1,3 @@
-
----
-
-### `lab_up.sh`
-```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -17,10 +12,10 @@ H1_IP=192.168.10.2/24 ; H2_IP=192.168.20.2/24
 R10_IP=192.168.10.1/24 ; R20_IP=192.168.20.1/24
 H1_GW=192.168.10.1 ; H2_GW=192.168.20.1
 STATE=/tmp/switching_l3_lab
-mkdir -p "$STATE"
 
-# Clean if exists
+# Clean if exists (lab_down.sh deletes $STATE, so create it after this)
 bash "$(dirname "$0")/lab_down.sh" || true
+mkdir -p "$STATE"
 
 # Namespaces
 for ns in "$SW" "$RTR" "$H1" "$H2"; do ip netns add "$ns"; done
@@ -54,12 +49,12 @@ for i in v_h1_sw v_h2_sw v_trunk_sw ; do ip -n "$SW" link set "$i" up; done
 
 # VLANs on the switch
 # - hostA port untagged VLAN 10 (PVID 10)
-ip -n "$SW" bridge vlan add dev v_h1_sw vid $V10 pvid untagged
+bridge -n "$SW" vlan add dev v_h1_sw vid $V10 pvid untagged
 # - hostB port untagged VLAN 20 (PVID 20)
-ip -n "$SW" bridge vlan add dev v_h2_sw vid $V20 pvid untagged
+bridge -n "$SW" vlan add dev v_h2_sw vid $V20 pvid untagged
 # - trunk carries 10 and 20 tagged
-ip -n "$SW" bridge vlan add dev v_trunk_sw vid $V10
-ip -n "$SW" bridge vlan add dev v_trunk_sw vid $V20
+bridge -n "$SW" vlan add dev v_trunk_sw vid $V10
+bridge -n "$SW" vlan add dev v_trunk_sw vid $V20
 
 # Host interfaces
 ip -n "$H1" link set lo up

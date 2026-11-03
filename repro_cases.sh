@@ -25,17 +25,17 @@ EOF
     [[ $# -eq 2 ]] || usage
     if [[ "$2" == "on" ]]; then
       # BAD: make trunk carry VLAN 10 untagged (native), 20 tagged
-      ip -n "$SW" bridge vlan del dev "$TRUNK_SW" vid 10 2>/dev/null || true
-      ip -n "$SW" bridge vlan add dev "$TRUNK_SW" vid 10 pvid untagged
-      ip -n "$SW" bridge vlan add dev "$TRUNK_SW" vid 20 2>/dev/null || true
+      bridge -n "$SW" vlan del dev "$TRUNK_SW" vid 10 2>/dev/null || true
+      bridge -n "$SW" vlan add dev "$TRUNK_SW" vid 10 pvid untagged
+      bridge -n "$SW" vlan add dev "$TRUNK_SW" vid 20 2>/dev/null || true
       echo "Native VLAN mismatch enabled: trunk now untagged VLAN 10."
     elif [[ "$2" == "off" ]]; then
       # GOOD: remove untagged on 10; trunk carries 10,20 tagged. Give the port a harmless native (1).
-      ip -n "$SW" bridge vlan del dev "$TRUNK_SW" vid 10 pvid untagged 2>/dev/null || true
-      ip -n "$SW" bridge vlan add dev "$TRUNK_SW" vid 10 2>/dev/null || true
-      ip -n "$SW" bridge vlan add dev "$TRUNK_SW" vid 20 2>/dev/null || true
+      bridge -n "$SW" vlan del dev "$TRUNK_SW" vid 10 pvid untagged 2>/dev/null || true
+      bridge -n "$SW" vlan add dev "$TRUNK_SW" vid 10 2>/dev/null || true
+      bridge -n "$SW" vlan add dev "$TRUNK_SW" vid 20 2>/dev/null || true
       # ensure some native exists (Linux bridge likes a PVID); VLAN 1 untagged is a neutral choice.
-      ip -n "$SW" bridge vlan add dev "$TRUNK_SW" vid 1 pvid untagged 2>/dev/null || true
+      bridge -n "$SW" vlan add dev "$TRUNK_SW" vid 1 pvid untagged 2>/dev/null || true
       echo "Native VLAN mismatch disabled: trunk tagged for 10,20; PVID set to VLAN 1."
     else usage; fi
     ;;
@@ -47,6 +47,8 @@ EOF
       echo "Set MTU 1300 on $SVI20."
     elif [[ "$2" == "off" ]]; then
       ip -n "$RTR" link set dev "$SVI20" mtu 1500
+      # hostA caches the smaller path MTU for about 10 minutes, so clear it or diag keeps reporting 1272
+      ip -n hostA route flush cache 2>/dev/null || true
       echo "Restored MTU 1500 on $SVI20."
     else usage; fi
     ;;

@@ -7,7 +7,7 @@
    - Fail → GW/SVI or VLAN 20 problem on hostB side
 3) If both pass GW pings → inter-VLAN path:
    - `ip netns exec hostA ping -c1 192.168.20.2`
-   - If fail, run on SW: `ip -n sw bridge vlan show dev v_trunk_sw`
+   - If fail, run on SW: `bridge -n sw vlan show dev v_trunk_sw`
      - shows `untagged` → native VLAN mismatch. **Fix:** make trunk VLANs tagged.
 
 **Symptom:** Some large payloads fail, small pings OK (TLS resets/black-holes)

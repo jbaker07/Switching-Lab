@@ -2,7 +2,7 @@
 set -euo pipefail
 
 require() { command -v "$1" >/dev/null || { echo "Missing $1"; exit 1; }; }
-for x in ip sysctl dnsmasq; do require "$x"; done
+for x in ip bridge sysctl dnsmasq; do require "$x"; done
 
 # Vars
 SW=sw ; RTR=rtr ; H1=hostA ; H2=hostB
@@ -52,6 +52,10 @@ for i in v_h1_sw v_h2_sw v_trunk_sw ; do ip -n "$SW" link set "$i" up; done
 bridge -n "$SW" vlan add dev v_h1_sw vid $V10 pvid untagged
 # - hostB port untagged VLAN 20 (PVID 20)
 bridge -n "$SW" vlan add dev v_h2_sw vid $V20 pvid untagged
+# - the bridge puts every new port in VLAN 1 untagged. Take the access ports out of it,
+#   or anything sent untagged in VLAN 1 (such as the router's native VLAN) reaches both hosts.
+bridge -n "$SW" vlan del dev v_h1_sw vid 1
+bridge -n "$SW" vlan del dev v_h2_sw vid 1
 # - trunk carries 10 and 20 tagged
 bridge -n "$SW" vlan add dev v_trunk_sw vid $V10
 bridge -n "$SW" vlan add dev v_trunk_sw vid $V20
@@ -80,17 +84,28 @@ ip -n "$H2" route add default via "$H2_GW"
 
 # Enable IP forwarding on router
 ip netns exec "$RTR" sysctl -w net.ipv4.ip_forward=1 >/dev/null
+# Make the router bind addresses to interfaces like a real router does.
+# By default Linux answers ARP for any local address on any interface and accepts
+# packets for a local address on any interface. Then an untagged frame that lands on
+# the parent v_trunk_rtr still reaches 192.168.10.1, and a native VLAN mismatch looks
+# healthy to ping. arp_ignore=1 answers ARP only on the interface that owns the address,
+# and rp_filter=1 drops packets that arrive on an interface the reply would not use.
+ip netns exec "$RTR" sysctl -w net.ipv4.conf.all.arp_ignore=1 >/dev/null
+ip netns exec "$RTR" sysctl -w net.ipv4.conf.all.rp_filter=1 >/dev/null
 
 # DHCP per VLAN using dnsmasq in router ns
+# Each range sets a tag and each router option is limited to its tag. An untagged
+# dhcp-option is global in dnsmasq, so two of them would leave the last one (the
+# VLAN 20 gateway) as the router for every client on both VLANs.
 DNSMASQ_PID="$STATE/dnsmasq.pid"
 cat >"$STATE/dnsmasq.conf" <<CONF
 port=0
 interface=v_trunk_rtr.$V10
-dhcp-range=192.168.10.50,192.168.10.99,255.255.255.0,12h
-dhcp-option=option:router,192.168.10.1
+dhcp-range=set:vlan$V10,192.168.10.50,192.168.10.99,255.255.255.0,12h
+dhcp-option=tag:vlan$V10,option:router,192.168.10.1
 interface=v_trunk_rtr.$V20
-dhcp-range=192.168.20.50,192.168.20.99,255.255.255.0,12h
-dhcp-option=option:router,192.168.20.1
+dhcp-range=set:vlan$V20,192.168.20.50,192.168.20.99,255.255.255.0,12h
+dhcp-option=tag:vlan$V20,option:router,192.168.20.1
 log-dhcp
 log-facility=$STATE/dnsmasq.log
 pid-file=$DNSMASQ_PID

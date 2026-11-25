@@ -1,0 +1,18 @@
+name: self-test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lab:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dnsmasq and dhclient
+        #dnsmasq-base is the binary without the system service, which would fight systemd-resolved for port 53
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dnsmasq-base isc-dhcp-client
+      - name: Run the self test
+        run: sudo ./tests/self_test.sh

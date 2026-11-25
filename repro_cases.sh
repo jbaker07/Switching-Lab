@@ -36,7 +36,7 @@ EOF
       bridge -n "$SW" vlan add dev "$TRUNK_SW" vid 20 2>/dev/null || true
       # ensure some native exists (Linux bridge likes a PVID); VLAN 1 untagged is a neutral choice.
       bridge -n "$SW" vlan add dev "$TRUNK_SW" vid 1 pvid untagged 2>/dev/null || true
-      echo "Native VLAN mismatch disabled: trunk tagged for 10,20; PVID set to VLAN 1."
+      echo "Native VLAN mismatch disabled: trunk tagged for 10 and 20, PVID set to VLAN 1."
     else usage; fi
     ;;
 
